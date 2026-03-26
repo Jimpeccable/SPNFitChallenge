@@ -1,0 +1,130 @@
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap');
+
+:root {
+  --bg-color: #080B14;
+  --accent-primary: #00D4FF;
+  --accent-primary-dim: rgba(0, 212, 255, 0.2);
+  --accent-secondary: #A3FF47;
+  --accent-alert: #FF4D6A;
+  --accent-gold: #FFB830;
+  --text-main: #F3F4F6;
+  --text-muted: #9CA3AF;
+
+  --glass-bg: rgba(255, 255, 255, 0.05);
+  --glass-highlight: rgba(255, 255, 255, 0.08);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  
+  --font-display: 'Barlow Condensed', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-color);
+  background-image: radial-gradient(circle at 15% 50%, rgba(0, 212, 255, 0.08), transparent 25%),
+                    radial-gradient(circle at 85% 30%, rgba(163, 255, 71, 0.05), transparent 25%);
+  color: var(--text-main);
+  font-family: var(--font-body);
+  line-height: 1.5;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+}
+
+a {
+  color: var(--accent-primary);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+a:hover {
+  color: #fff;
+}
+
+button {
+  font-family: var(--font-body);
+  cursor: pointer;
+  border: none;
+  outline: none;
+}
+
+/* Glassmorphism Utilities */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  padding: 24px;
+  transition: transform 0.3s ease, background 0.3s ease;
+}
+
+.glass-panel:hover {
+  transform: translateY(-2px);
+  background: var(--glass-highlight);
+}
+
+.glass-input {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--glass-border);
+  color: var(--text-main);
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-family: var(--font-body);
+  transition: border-color 0.2s ease;
+  width: 100%;
+}
+
+.glass-input:focus {
+  border-color: var(--accent-primary);
+  outline: none;
+}
+
+/* Primary Button */
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent-primary), #0088cc);
+  color: #000;
+  font-weight: 700;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 1rem;
+  letter-spacing: 0.5px;
+  transition: opacity 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 4px 15px var(--accent-primary-dim);
+}
+
+.btn-primary:hover {
+  opacity: 0.9;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 212, 255, 0.4);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+/* Container */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+/* Saffolding helper */
+.text-gradient {
+  background: linear-gradient(to right, var(--accent-primary), var(--accent-secondary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
