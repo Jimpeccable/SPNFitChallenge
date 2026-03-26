@@ -251,7 +251,7 @@ export default function Dashboard() {
           
           <div className="glass-panel">
             <h2 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Zap size={20} color="var(--accent-primary)" /> Burn Data
+              <Zap size={20} color="var(--accent-primary)" /> Log Activity
             </h2>
             <form onSubmit={handleLogWorkout} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div>
@@ -338,7 +338,7 @@ export default function Dashboard() {
         {/* Right Column: Recent Activity Feed */}
         <div className="glass-panel">
           <h2 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Activity size={20} color="var(--accent-secondary)" /> Recent Transmissions
+            <Activity size={20} color="var(--accent-secondary)" /> Recent Activity
           </h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {logs.length === 0 ? (

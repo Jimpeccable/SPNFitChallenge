@@ -82,6 +82,23 @@ export default function Admin() {
     const { error } = await supabase.from('users').update({ team_id: teamId || null }).eq('id', userId);
     if (!error) loadAllData(); else alert(error.message);
   };
+  const renameTeam = async (id: string) => {
+    const newName = prompt("Enter new team name:");
+    if (!newName) return;
+    await supabase.from('teams').update({ name: newName }).eq('id', id);
+    loadAllData();
+  };
+  const deleteTeam = async (id: string) => {
+    if (!window.confirm("Delete this team completely? Users will become solo!")) return;
+    await supabase.from('users').update({ team_id: null }).eq('team_id', id); // clear users out safely
+    await supabase.from('teams').delete().eq('id', id);
+    loadAllData();
+  };
+  const deleteUser = async (id: string) => {
+    if (!window.confirm("Permanently delete this athlete from the leaderboard?")) return;
+    await supabase.from('users').delete().eq('id', id);
+    loadAllData();
+  };
 
   /* CHALLENGE CONFIG */
   const handleCreateChallenge = async (e: React.FormEvent) => {
@@ -95,6 +112,12 @@ export default function Admin() {
   const toggleChallenge = async (id: string, currentStatus: boolean) => {
     await supabase.from('challenges').update({ is_active: !currentStatus }).eq('id', id);
     loadAllData();
+  };
+  const nukeChallenge = async (id: string) => {
+    if (prompt("Type 'DELETE' to permanently nuke this challenge off the board.") === 'DELETE') {
+       await supabase.from('challenges').delete().eq('id', id);
+       loadAllData();
+    }
   };
 
   /* MAP EDITOR */
@@ -220,6 +243,7 @@ export default function Admin() {
                 <button className="btn-primary" style={{ background: c.is_active ? 'rgba(163, 255, 71, 0.2)' : 'rgba(255, 77, 106, 0.2)', boxShadow: 'none', color: 'white' }} onClick={() => toggleChallenge(c.id, c.is_active)} >
                   {c.is_active ? 'Active' : 'Archived'}
                 </button>
+                <button className="btn-primary" style={{ background: 'transparent', border: '1px solid var(--accent-alert)', color: 'var(--accent-alert)' }} onClick={() => nukeChallenge(c.id)}>Delete</button>
               </div>
             </div>
           ))}
@@ -230,17 +254,26 @@ export default function Admin() {
       <section className="glass-panel" style={{ marginBottom: '3rem', borderLeft: '4px solid var(--accent-secondary)' }}>
         <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem' }}><Users size={24} color="var(--accent-secondary)" /> Manage Teams & Athletes</h2>
         
-        {/* Teams Maker */}
+        {/* Teams Maker & List */}
         <div style={{ marginBottom: '2rem', padding: '1rem', background: 'rgba(0,0,0,0.2)', borderRadius: '8px' }}>
-            <h3 style={{marginBottom: '1rem', fontSize: '1rem', color: 'var(--text-muted)'}}>Create Team</h3>
-            <form onSubmit={handleCreateTeam} style={{ display: 'flex', gap: '1rem' }}>
+            <h3 style={{marginBottom: '1rem', fontSize: '1rem', color: 'var(--text-muted)'}}>Manage Active Teams</h3>
+            <form onSubmit={handleCreateTeam} style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
               <input type="text" className="glass-input" placeholder="Team Name (e.g. Finance Legends)" value={newTeamName} onChange={e=>setNewTeamName(e.target.value)} required />
               <button type="submit" className="btn-primary" style={{ whiteSpace: 'nowrap' }}><Plus size={16}/> New Team</button>
             </form>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+               {teams.map(t => (
+                 <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(0,0,0,0.3)', padding: '6px 12px', borderRadius: '20px', border: '1px solid var(--accent-secondary)' }}>
+                   <span>{t.name}</span>
+                   <button onClick={() => renameTeam(t.id)} style={{ background: 'none', border: 'none', color: 'var(--accent-gold)', cursor: 'pointer', fontSize: '12px' }}>Edit</button>
+                   <button onClick={() => deleteTeam(t.id)} style={{ background: 'none', border: 'none', color: 'var(--accent-alert)', cursor: 'pointer', fontSize: '12px' }}>X</button>
+                 </div>
+               ))}
+            </div>
         </div>
 
         {/* User List */}
-        <h3 style={{marginBottom: '1rem', fontSize: '1rem', color: 'var(--text-muted)'}}>Assign Users to Teams</h3>
+        <h3 style={{marginBottom: '1rem', fontSize: '1rem', color: 'var(--text-muted)'}}>Assign Users to Teams / Remove Athletes</h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {usersList.map(u => (
             <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', background: 'rgba(0,0,0,0.3)', borderRadius: '8px' }}>
@@ -248,10 +281,13 @@ export default function Admin() {
                 <strong style={{fontSize: '1.2rem'}}>{u.display_name}</strong>
                 <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>{u.email}</div>
               </div>
-              <select className="glass-input" style={{ width: '200px' }} value={u.team_id || ''} onChange={(e) => assignUserTeam(u.id, e.target.value)}>
-                <option value="">-- No Team (Solo) --</option>
-                {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
+              <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                 <select className="glass-input" style={{ width: '200px' }} value={u.team_id || ''} onChange={(e) => assignUserTeam(u.id, e.target.value)}>
+                   <option value="">-- No Team (Solo) --</option>
+                   {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                 </select>
+                 <button className="btn-primary" style={{ background: 'transparent', padding: '6px', color: 'var(--accent-alert)', border: '1px solid var(--accent-alert)' }} onClick={() => deleteUser(u.id)}>Delete Rank</button>
+              </div>
             </div>
           ))}
         </div>
