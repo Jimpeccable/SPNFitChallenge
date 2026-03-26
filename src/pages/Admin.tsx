@@ -174,18 +174,28 @@ export default function Admin() {
       {/* 1. CHALLENGES */}
       <section className="glass-panel" style={{ marginBottom: '3rem', borderLeft: '4px solid var(--accent-primary)' }}>
         <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem' }}><MapIcon size={24} color="var(--accent-primary)" /> Global Challenges</h2>
-        <form onSubmit={handleCreateChallenge} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem', marginBottom: '2rem', padding: '1rem', background: 'rgba(0,0,0,0.2)' }}>
-          <input type="text" className="glass-input" placeholder="Challenge Name" value={newChalName} onChange={e=>setNewChalName(e.target.value)} required />
-          <select className="glass-input" value={newChalType} onChange={e=>setNewChalType(e.target.value)}>
-             <option value="journey">🏰 Quest (Journey Map)</option>
-             <option value="battery">⚡ Power the Office</option>
-             <option value="territory">🗺️ Territory War</option>
-             <option value="build">🏗️ The Build-Off</option>
-             <option value="bingo">🎯 Fitness Bingo</option>
-             <option value="steps">👣 Step Loggers</option>
-          </select>
-          <input type="number" step="0.1" className="glass-input" placeholder="Target EP" value={newChalEp} onChange={e=>setNewChalEp(e.target.value)} required />
-          <button type="submit" className="btn-primary" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}><Plus size={16}/> Create Goal</button>
+        <form onSubmit={handleCreateChallenge} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '2rem', padding: '1rem', background: 'rgba(0,0,0,0.2)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem' }}>
+            <input type="text" className="glass-input" placeholder="Challenge Name" value={newChalName} onChange={e=>setNewChalName(e.target.value)} required />
+            <select className="glass-input" value={newChalType} onChange={e=>setNewChalType(e.target.value)}>
+               <option value="journey">🏰 Quest (Journey Map)</option>
+               <option value="battery">⚡ Power the Office</option>
+               <option value="territory">🗺️ Territory War</option>
+               <option value="build">🏗️ The Build-Off</option>
+               <option value="bingo">🎯 Fitness Bingo</option>
+               <option value="steps">👣 Step Loggers</option>
+            </select>
+            <input type="number" step="0.1" className="glass-input" placeholder="Target EP" value={newChalEp} onChange={e=>setNewChalEp(e.target.value)} required />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', fontSize: '0.85rem' }}>
+             <button type="button" style={{ background: 'rgba(255,184,48,0.2)', border: '1px solid var(--accent-gold)', color: 'var(--accent-gold)', padding: '4px 12px', borderRadius: '4px', cursor: 'pointer' }} onClick={() => {
+                 const weeks = prompt("How many weeks will this challenge run? (e.g. '4')") || "1";
+                 const suggestedTotal = usersList.length * 500 * Number(weeks);
+                 setNewChalEp(suggestedTotal.toString());
+                 alert(`Suggested Target: ${suggestedTotal} EP.\nCalculation: ${usersList.length} athletes × 500 EP/week average × ${weeks} weeks.`);
+             }}>✨ Auto-Calculate Target EP</button>
+             <button type="submit" className="btn-primary" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginLeft: 'auto' }}><Plus size={16}/> Create Goal</button>
+          </div>
         </form>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {challenges.map(c => (
