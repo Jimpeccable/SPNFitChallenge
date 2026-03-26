@@ -46,6 +46,16 @@ CREATE TABLE workout_logs (
   challenge_id UUID -- Placeholder for later challenge linkage
 );
 
+-- 4b. Challenges Config
+CREATE TABLE challenges (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT NOT NULL,
+  type TEXT NOT NULL, -- 'journey' or 'battery'
+  target_ep NUMERIC(10,2) NOT NULL,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
 -- 5. Default Config Items (Optional, like global Teams Webhook or Grace Period)
 CREATE TABLE settings (
   key TEXT PRIMARY KEY,

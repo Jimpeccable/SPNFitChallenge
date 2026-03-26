@@ -38,6 +38,9 @@ export default function Navbar() {
         <Link to="/leaderboard" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 500 }}>
           <BarChart3 size={18} /> Leaderboard
         </Link>
+        <Link to="/challenges" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 500, color: 'var(--accent-primary)' }}>
+          <Activity size={18} /> Challenges
+        </Link>
         {isAdmin && (
           <Link to="/admin" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 500, color: 'var(--accent-alert)' }}>
             <Shield size={18} /> Admin

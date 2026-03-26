@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { supabase } from './lib/supabase';
@@ -7,6 +8,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Leaderboard from './pages/Leaderboard';
 import Admin from './pages/Admin';
+import Challenges from './pages/Challenges';
 import Navbar from './components/Navbar';
 
 function App() {
@@ -44,6 +46,7 @@ function App() {
         <Route path="/login" element={!session ? <Login /> : <Navigate to="/dashboard" />} />
         <Route path="/dashboard" element={session ? <Dashboard /> : <Navigate to="/login" />} />
         <Route path="/leaderboard" element={session ? <Leaderboard /> : <Navigate to="/login" />} />
+        <Route path="/challenges" element={session ? <Challenges /> : <Navigate to="/login" />} />
         <Route path="/admin" element={session ? <Admin /> : <Navigate to="/login" />} />
       </Routes>
     </div>
