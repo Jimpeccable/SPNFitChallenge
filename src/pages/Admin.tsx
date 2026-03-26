@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Shield, Plus, Settings, Users, Map as MapIcon, Target } from 'lucide-react';
+import { Shield, Plus, Settings, Users, Map as MapIcon } from 'lucide-react';
 
 type ActivityType = { id: string, name: string, unit_label: string, ep_per_unit: number, is_active: boolean };
 type Team = { id: string, name: string };

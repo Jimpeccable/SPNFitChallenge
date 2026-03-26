@@ -1,9 +1,8 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Map, Battery, Zap } from 'lucide-react';
 
 type Challenge = { id: string, name: string, type: string, target_ep: number, is_active: boolean };
-type LogEntry = { ep_earned: number };
 
 export default function Challenges() {
   const [challenges, setChallenges] = useState<Challenge[]>([]);
