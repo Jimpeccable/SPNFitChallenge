@@ -85,6 +85,9 @@ ALTER TABLE workout_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
 
 -- Basic Policies (allowing simple public read for authenticated, and own insert/update)
+-- Adding missing config column to challenges safely
+ALTER TABLE challenges ADD COLUMN IF NOT EXISTS config JSONB DEFAULT '{}'::jsonb;
+
 CREATE POLICY "Allow public read on teams" ON teams FOR SELECT USING (true);
 CREATE POLICY "Allow public read on users" ON users FOR SELECT USING (true);
 CREATE POLICY "Allow users to update own profile" ON users FOR UPDATE USING (auth.uid() = id);
