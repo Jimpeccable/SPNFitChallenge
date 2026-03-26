@@ -20,7 +20,7 @@ export default function Dashboard() {
 
   // Phase 3 & 4 States
   const [journey, setJourney] = useState<any>(null);
-  const [platformEp, setPlatformEp] = useState(0);
+  const [allPlatformLogs, setAllPlatformLogs] = useState<any[]>([]);
   const [teams, setTeams] = useState<any[]>([]);
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -56,7 +56,7 @@ export default function Dashboard() {
     const { data: cfg } = await supabase.from('settings').select('value').eq('id', 'platform_config').maybeSingle();
     if (cfg?.value) setGlobalConfig(cfg.value as any);
 
-    // Load logs
+    // Load logs for current user feed
     const { data: logsData } = await supabase
       .from('workout_logs')
       .select('id, activity_type_id, quantity, ep_earned, logged_at, activity_types(name, unit_label)')
@@ -66,7 +66,8 @@ export default function Dashboard() {
     
     if (logsData) {
       setLogs(logsData as any);
-      setTotalEP(logsData.reduce((acc, log) => acc + Number(log.ep_earned), 0));
+      const userTotal = logsData.reduce((acc, log) => acc + Number(log.ep_earned), 0);
+      setTotalEP(userTotal);
       const oneWeekAgo = new Date();
       oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
       const weekLogs = logsData.filter(log => new Date(log.logged_at) > oneWeekAgo);
@@ -84,9 +85,9 @@ export default function Dashboard() {
     const { data: cData } = await supabase.from('challenges').select('*').eq('is_active', true).eq('type', 'journey').limit(1);
     if (cData && cData.length > 0) setJourney(cData[0]);
 
-    // Load Platform EP
-    const { data: pLog } = await supabase.from('workout_logs').select('ep_earned');
-    if (pLog) setPlatformEp(pLog.reduce((a, b) => a + Number(b.ep_earned), 0));
+    // Load Platform EP securely for all users to calculate team scores
+    const { data: pLog } = await supabase.from('workout_logs').select('ep_earned, user_id');
+    if (pLog) setAllPlatformLogs(pLog);
 
     // Load Teams and Users
     const { data: tData } = await supabase.from('teams').select('*').order('name');
@@ -145,10 +146,10 @@ export default function Dashboard() {
 
   if (loading) return <div className="container" style={{paddingTop: '4rem', textAlign: 'center'}}>Loading Matrix...</div>;
 
-  // Determine Pre-Start Lockout
+  // Determine Pre-Start Lockout (Admin bypass removed so you can see it working!)
   let isLocked = false;
   let timeRemaining = 0;
-  if (globalConfig.start_date && !currentUser?.is_admin) {
+  if (globalConfig.start_date) {
       const startTime = new Date(globalConfig.start_date).getTime();
       if (startTime > now) {
          isLocked = true;
@@ -158,7 +159,25 @@ export default function Dashboard() {
 
   const epTerm = globalConfig.ep_name || 'EP';
 
-  // Compute Letterbox Map Stats
+  // Compute Platform Log Collations per Team
+  const teamScores: Record<string, number> = {};
+  teams.forEach(t => teamScores[t.id] = 0);
+  
+  let myPlatformScore = totalEP; // Default to solo score if no team is assigned
+
+  allPlatformLogs.forEach(log => {
+      const logUser = allUsers.find(u => u.id === log.user_id);
+      if (logUser && logUser.team_id) {
+         teamScores[logUser.team_id] = (teamScores[logUser.team_id] || 0) + Number(log.ep_earned);
+      }
+  });
+
+  // If the user has a team, the Journey Map tracks their Team's total progress. Otherwise, it tracks their Solo progress.
+  if (currentUser?.team_id) {
+     myPlatformScore = teamScores[currentUser.team_id] || 0;
+  }
+
+  // Compute Letterbox Map Stats using 'myPlatformScore' instead of the global office sum
   let prevWp = { x: 0, y: 50, ep: 0, name: 'Start' };
   let nextWp = { x: 100, y: 50, ep: 100, name: 'End' };
   let currentX = 0;
@@ -168,7 +187,7 @@ export default function Dashboard() {
      const waypoints = journey.config.waypoints;
      nextWp = waypoints[0];
      for (let i = 0; i < waypoints.length; i++) {
-        if (platformEp < waypoints[i].ep) {
+        if (myPlatformScore < waypoints[i].ep) {
           nextWp = waypoints[i];
           break;
         }
@@ -177,7 +196,7 @@ export default function Dashboard() {
      }
 
      if (prevWp.ep !== nextWp.ep) {
-        const segObj = (platformEp - prevWp.ep) / (nextWp.ep - prevWp.ep);
+        const segObj = (myPlatformScore - prevWp.ep) / (nextWp.ep - prevWp.ep);
         currentX = prevWp.x + (nextWp.x - prevWp.x) * Math.max(0, Math.min(1, segObj));
      } else {
         currentX = nextWp.x;
@@ -197,7 +216,7 @@ export default function Dashboard() {
       
       {/* GLOBAL LOCKOUT OVERLAY */}
       {isLocked && (
-         <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 100, backdropFilter: 'blur(12px)', background: 'rgba(0,15,30,0.6)', borderRadius: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: '10rem' }}>
+         <div style={{ position: 'fixed', top: '70px', left: 0, width: '100vw', height: '100vh', zIndex: 1000, backdropFilter: 'blur(20px)', background: 'rgba(0,10,20,0.8)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
             <Clock size={80} color="var(--accent-primary)" style={{ marginBottom: '2rem' }} />
             <h1 style={{ fontSize: '3rem', margin: 0, textShadow: '0 0 20px rgba(163, 255, 71, 0.5)' }}>THE CHALLENGE BEGINS IN</h1>
             <div style={{ display: 'flex', gap: '2rem', marginTop: '2rem' }}>
@@ -211,7 +230,7 @@ export default function Dashboard() {
       )}
 
       {/* Content wrapper subjected to blur slightly by the absolute overlay if locked */}
-      <div style={{ filter: isLocked ? 'blur(8px)' : 'none', pointerEvents: isLocked ? 'none' : 'auto' }}>
+      <div style={{ filter: isLocked ? 'blur(15px)' : 'none', pointerEvents: isLocked ? 'none' : 'auto' }}>
           
           {/* 0. Letterbox Map Overlay */}
           {journey && journey.config.imageUrl && (
@@ -221,7 +240,7 @@ export default function Dashboard() {
                     
                     {/* Pins */}
                     {journey.config.waypoints.map((wp: any, i: number) => {
-                        const reached = platformEp >= wp.ep;
+                        const reached = myPlatformScore >= wp.ep;
                         return (
                           <div key={i} style={{ position: 'absolute', left: `${wp.x}%`, top: `${wp.y}%`, transform: 'translate(-50%, -50%)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                             <div style={{ width: 14, height: 14, background: reached ? 'var(--accent-gold)' : 'rgba(255,255,255,0.3)', borderRadius: '50%', border: '2px solid #000' }} />
@@ -244,11 +263,11 @@ export default function Dashboard() {
                 <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', background: 'linear-gradient(to bottom, rgba(0,0,0,0.9), transparent)', padding: '1rem', display: 'flex', justifyContent: 'space-between' }}>
                   <div>
                       <h3 style={{ margin: 0, fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '8px' }}><MapIcon size={18} color="var(--accent-primary)"/> {journey.name}</h3>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{platformEp.toLocaleString()} / {journey.target_ep.toLocaleString()} {epTerm} Logged Collectively</div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{currentUser?.team_id ? 'Team' : 'Solo'} Progress: {myPlatformScore.toLocaleString()} / {journey.target_ep.toLocaleString()} {epTerm} logged!</div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
                       <div style={{ fontSize: '0.9rem', color: 'var(--accent-gold)' }}>Next Checkpoint: <strong>{nextWp.name}</strong></div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{Math.max(0, nextWp.ep - platformEp).toFixed(1)} {epTerm} remaining</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{Math.max(0, nextWp.ep - myPlatformScore).toFixed(1)} {epTerm} remaining</div>
                   </div>
                 </div>
 
@@ -329,10 +348,14 @@ export default function Dashboard() {
                   {teams.map(team => {
                     const members = allUsers.filter(u => u.team_id === team.id);
                     if (members.length === 0) return null;
+                    const thisTeamScore = teamScores[team.id] || 0;
                     
                     return (
                       <div key={team.id} style={{ background: 'rgba(0,0,0,0.3)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                        <h3 style={{ margin: '0 0 1rem 0', color: 'var(--accent-secondary)' }}>{team.name}</h3>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                           <h3 style={{ margin: 0, color: 'var(--accent-secondary)' }}>{team.name}</h3>
+                           <span style={{ background: 'rgba(255,255,255,0.1)', padding: '4px 12px', borderRadius: '20px', fontSize: '0.85rem', fontWeight: 'bold' }}>{thisTeamScore.toFixed(1)} {epTerm}</span>
+                        </div>
                         <div style={{ display: 'grid', gap: '0.5rem' }}>
                           {members.map(m => (
                               <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem', background: 'rgba(255,255,255,0.02)', borderRadius: '6px' }}>
