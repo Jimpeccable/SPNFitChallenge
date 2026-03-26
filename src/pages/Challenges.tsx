@@ -151,7 +151,27 @@ export default function Challenges() {
               );
             }
 
-            return null;
+            // Fallback for new quest types currently in development
+            return (
+                <div key={c.id} className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', border: '1px solid var(--accent-gold)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h2 style={{ margin: 0 }}>{c.name}</h2>
+                    <Map size={24} color="var(--accent-gold)" />
+                  </div>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Mode: {c.type.toUpperCase()}</p>
+                  
+                  <div style={{ height: '30px', background: 'rgba(0,0,0,0.5)', borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}>
+                    <div style={{ width: `${progress}%`, height: '100%', background: 'var(--accent-gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', color: '#000', fontWeight: 'bold' }}>
+                       {progress > 5 && `${progress.toFixed(1)}%`}
+                    </div>
+                  </div>
+                  
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    <span>{progress.toFixed(1)}% Complete</span>
+                    <span>{c.target_ep} EP Required</span>
+                  </div>
+                </div>
+            );
           })}
         </div>
       )}

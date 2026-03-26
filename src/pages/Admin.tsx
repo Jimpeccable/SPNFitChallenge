@@ -177,8 +177,12 @@ export default function Admin() {
         <form onSubmit={handleCreateChallenge} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem', marginBottom: '2rem', padding: '1rem', background: 'rgba(0,0,0,0.2)' }}>
           <input type="text" className="glass-input" placeholder="Challenge Name" value={newChalName} onChange={e=>setNewChalName(e.target.value)} required />
           <select className="glass-input" value={newChalType} onChange={e=>setNewChalType(e.target.value)}>
-             <option value="journey">Journey Map (Route Pin)</option>
-             <option value="battery">Office Battery (Charge Grid)</option>
+             <option value="journey">🏰 Quest (Journey Map)</option>
+             <option value="battery">⚡ Power the Office</option>
+             <option value="territory">🗺️ Territory War</option>
+             <option value="build">🏗️ The Build-Off</option>
+             <option value="bingo">🎯 Fitness Bingo</option>
+             <option value="steps">👣 Step Loggers</option>
           </select>
           <input type="number" step="0.1" className="glass-input" placeholder="Target EP" value={newChalEp} onChange={e=>setNewChalEp(e.target.value)} required />
           <button type="submit" className="btn-primary" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}><Plus size={16}/> Create Goal</button>
