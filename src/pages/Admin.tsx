@@ -314,6 +314,18 @@ export default function Admin() {
         </div>
       </section>
 
+      {/* 4. DANGER ZONE */}
+      <section className="glass-panel" style={{ borderLeft: '4px solid var(--accent-alert)', marginTop: '3rem' }}>
+        <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem', color: 'var(--accent-alert)' }}><Settings size={24} color="var(--accent-alert)" /> Danger Zone (Hard Reset)</h2>
+        <p style={{ color: 'var(--text-muted)' }}>If you are done testing the platform and want to actually begin the real challenge, you can permanently erase all logged activities here to start from 0 EP.</p>
+        <button className="btn-primary" style={{ background: 'transparent', border: '2px solid var(--accent-alert)', color: 'var(--accent-alert)', marginTop: '1rem', padding: '12px 24px', fontWeight: 'bold' }} onClick={async () => {
+           if (prompt("CRITICAL WARNING: This irrevocably deletes EVERY workout log from ALL users platform-wide. Type 'FACTORY RESET' to proceed:") === 'FACTORY RESET') {
+              const { error } = await supabase.from('workout_logs').delete().neq('id', '00000000-0000-0000-0000-000000000000'); // Deletes all rows safely
+              if (!error) { alert("All logs annihilated. The platform EP is back to 0."); loadAllData(); } else alert("Database error: " + error.message);
+           }
+        }}>🔥 Purge All Logs & Reset Platform to 0 EP</button>
+      </section>
+
     </div>
   );
 }
