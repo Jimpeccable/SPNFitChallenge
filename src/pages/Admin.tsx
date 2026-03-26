@@ -110,10 +110,18 @@ export default function Admin() {
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
     
-    const wpName = prompt("Enter Waypoint Name (e.g. 'Mordor Gates'):");
-    if (!wpName) return;
-    const wpEp = prompt(`Enter EP required to reach ${wpName}:`);
-    if (!wpEp) return;
+    let wpName = '';
+    let wpEp = '';
+
+    if (waypoints.length === 0) {
+      wpName = 'Start';
+      wpEp = '0';
+    } else {
+      wpName = prompt("Enter Waypoint Name (e.g. 'Mordor Gates'):") || '';
+      if (!wpName) return;
+      wpEp = prompt(`Enter EP required to reach ${wpName}:`) || '';
+      if (!wpEp) return;
+    }
 
     setWaypoints([...waypoints, { x, y, name: wpName, ep: Number(wpEp) }]);
   };
@@ -148,10 +156,10 @@ export default function Admin() {
           <h2>Map Route Editor</h2>
           <div style={{ display: 'flex', gap: '1rem' }}>
             <input type="text" className="glass-input" placeholder="Paste Map Image URL (JPG/PNG)" value={mapImageUrl} onChange={e => setMapImageUrl(e.target.value)} />
-            <button className="btn-primary" onClick={saveMapConfig}>Save Route Settings</button>
-            <button className="btn-primary" style={{ background: 'transparent', border: '1px solid #fff' }} onClick={() => setEditingMapId(null)}>Cancel</button>
+            <button className="btn-primary" style={{ color: 'white' }} onClick={saveMapConfig}>Save Route Settings</button>
+            <button className="btn-primary" style={{ background: 'transparent', border: '1px solid #fff', color: 'white' }} onClick={() => setEditingMapId(null)}>Cancel</button>
           </div>
-          <p style={{ color: 'var(--text-muted)' }}>Click anywhere on your map image below to drop a new Milestone target.</p>
+          <p style={{ color: 'var(--text-muted)' }}>Click anywhere on your map image below to drop a new Milestone target. (First click will automatically become the START point!)</p>
           
           {mapImageUrl && (
             <div style={{ position: 'relative', display: 'inline-block', border: '2px solid var(--accent-primary)', cursor: 'crosshair', alignSelf: 'flex-start' }}>
@@ -205,11 +213,11 @@ export default function Admin() {
               </div>
               <div style={{ display: 'flex', gap: '1rem' }}>
                 {c.type === 'journey' && (
-                  <button className="btn-primary" style={{ background: 'transparent', border: '1px solid var(--accent-gold)', padding: '6px 16px' }} onClick={() => openMapEditor(c)}>
+                  <button className="btn-primary" style={{ background: 'transparent', border: '1px solid var(--accent-gold)', padding: '6px 16px', color: 'white' }} onClick={() => openMapEditor(c)}>
                     <Link size={14} style={{ marginRight: 6 }} /> Edit Map
                   </button>
                 )}
-                <button className="btn-primary" style={{ background: c.is_active ? 'rgba(163, 255, 71, 0.2)' : 'rgba(255, 77, 106, 0.2)', boxShadow: 'none' }} onClick={() => toggleChallenge(c.id, c.is_active)} >
+                <button className="btn-primary" style={{ background: c.is_active ? 'rgba(163, 255, 71, 0.2)' : 'rgba(255, 77, 106, 0.2)', boxShadow: 'none', color: 'white' }} onClick={() => toggleChallenge(c.id, c.is_active)} >
                   {c.is_active ? 'Active' : 'Archived'}
                 </button>
               </div>

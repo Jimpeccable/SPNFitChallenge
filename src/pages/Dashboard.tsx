@@ -1,213 +1,367 @@
+import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Trophy, Activity, Zap, Target } from 'lucide-react';
-import { useEffect, useState, useMemo } from 'react';
+import { Activity, Flame, Plus, Trophy, Zap, Map as MapIcon, Users as UsersIcon, Heart } from 'lucide-react';
 
-type ActivityType = { id: string, name: string, unit_label: string, ep_per_unit: number, icon_emoji: string };
-type UserProfile = { display_name: string, team_id: string | null, id: string };
-type LogEntry = { id: string, ep_earned: number, activity_type_id: string, logged_at: string, quantity: number };
+type WorkoutLog = { id: string, activity_type_id: string, quantity: number, ep_earned: number, logged_at: string, activity_types: { name: string, unit_label: string } };
+type ActivityType = { id: string, name: string, unit_label: string, ep_per_unit: number };
 
 export default function Dashboard() {
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [logs, setLogs] = useState<WorkoutLog[]>([]);
   const [activities, setActivities] = useState<ActivityType[]>([]);
-  const [logs, setLogs] = useState<LogEntry[]>([]);
-  
-  // Form state
-  const [selectedActivity, setSelectedActivity] = useState('');
-  const [quantity, setQuantity] = useState('');
-  const [logDate, setLogDate] = useState(new Date().toISOString().split('T')[0]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [totalEP, setTotalEP] = useState(0);
+  const [weekEP, setWeekEP] = useState(0);
+  const [loading, setLoading] = useState(true);
 
-  // Filter State
-  const [filterPeriod, setFilterPeriod] = useState('all');
-  const [filterActivity, setFilterActivity] = useState('all');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [typeId, setTypeId] = useState('');
+  const [qty, setQty] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  // New states for Phase 3
+  const [journey, setJourney] = useState<any>(null);
+  const [platformEp, setPlatformEp] = useState(0);
+  const [teams, setTeams] = useState<any[]>([]);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  const THEMATIC_QUOTES = [
+    "The wind carries whispers of distant lands. Keep pushing forward.",
+    "The ground beneath your boots is hard, but your resolve is harder.",
+    "Every step echoes with the legacy of those who walked before you.",
+    "A strange structure hums with energy nearby. You are making monumental progress.",
+    "The air is electric. Your team's momentum is unstoppable.",
+    "Dark clouds part, revealing a glimmer of your ultimate destination.",
+    "You smell ancient pine and petrichor. The journey stretches onward."
+  ];
 
   useEffect(() => {
-    async function loadData() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data: userProfile } = await supabase.from('users').select('*').eq('id', user.id).single();
-      if (userProfile) setProfile(userProfile);
-
-      const { data: acts } = await supabase.from('activity_types').select('*').eq('is_active', true);
-      if (acts) {
-        setActivities(acts);
-        if (acts.length > 0) setSelectedActivity(acts[0].id);
-      }
-
-      await fetchLogs(user.id);
-    }
     loadData();
   }, []);
 
-  async function fetchLogs(userId: string) {
-    const { data } = await supabase.from('workout_logs').select('id, ep_earned, activity_type_id, logged_at, quantity').eq('user_id', userId);
-    if (data) setLogs(data);
+  async function loadData() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // Load user profile
+    const { data: profile } = await supabase.from('users').select('*').eq('id', user.id).single();
+    setCurrentUser(profile);
+
+    // Load logs
+    const { data: logsData } = await supabase
+      .from('workout_logs')
+      .select('id, activity_type_id, quantity, ep_earned, logged_at, activity_types(name, unit_label)')
+      .eq('user_id', user.id)
+      .order('logged_at', { ascending: false })
+      .limit(50);
+    
+    if (logsData) {
+      setLogs(logsData as any);
+      setTotalEP(logsData.reduce((acc, log) => acc + Number(log.ep_earned), 0));
+      const oneWeekAgo = new Date();
+      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+      const weekLogs = logsData.filter(log => new Date(log.logged_at) > oneWeekAgo);
+      setWeekEP(weekLogs.reduce((acc, log) => acc + Number(log.ep_earned), 0));
+    }
+
+    // Load activities
+    const { data: actData } = await supabase.from('activity_types').select('*').eq('is_active', true);
+    if (actData) {
+      setActivities(actData);
+      if (actData.length > 0) setTypeId(actData[0].id);
+    }
+
+    // Load Journey Challenge
+    const { data: cData } = await supabase.from('challenges').select('*').eq('is_active', true).eq('type', 'journey').limit(1);
+    if (cData && cData.length > 0) setJourney(cData[0]);
+
+    // Load Platform EP
+    const { data: pLog } = await supabase.from('workout_logs').select('ep_earned');
+    if (pLog) setPlatformEp(pLog.reduce((a, b) => a + Number(b.ep_earned), 0));
+
+    // Load Teams and Users
+    const { data: tData } = await supabase.from('teams').select('*').order('name');
+    if (tData) setTeams(tData);
+
+    const { data: uData } = await supabase.from('users').select('*').order('display_name');
+    if (uData) setAllUsers(uData);
+
+    setLoading(false);
   }
 
   const handleLogWorkout = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!profile || !selectedActivity || !quantity || !logDate) return;
+    if (!typeId || !qty || !date) return;
+    setSubmitting(true);
+    
+    const { data: { user } } = await supabase.auth.getUser();
+    const act = activities.find(a => a.id === typeId);
+    if (!user || !act) return;
 
-    setIsSubmitting(true);
-    const act = activities.find(a => a.id === selectedActivity);
-    if (!act) return;
-
-    const ep = Number(quantity) * Number(act.ep_per_unit);
-
-    // Make sure we convert string date to full timestamptz (or just date string works)
-    const { error } = await supabase.from('workout_logs').insert([
-      {
-        user_id: profile.id,
-        activity_type_id: selectedActivity,
-        quantity: Number(quantity),
-        ep_earned: ep,
-        logged_at: new Date(logDate).toISOString(),
-        notes: ''
-      }
-    ]);
+    const ep = Number(qty) * act.ep_per_unit;
+    const { error } = await supabase.from('workout_logs').insert([{
+      user_id: user.id,
+      activity_type_id: typeId,
+      quantity: Number(qty),
+      ep_earned: ep,
+      logged_at: new Date(date).toISOString()
+    }]);
 
     if (!error) {
-      setQuantity('');
-      alert(`Workout logged! Earned ${ep} EP.`);
-      fetchLogs(profile.id);
+      setQty('');
+      loadData();
     } else {
-      alert(`Error logging workout: ${error.message}`);
+      alert(error.message);
     }
-    setIsSubmitting(false);
+    setSubmitting(false);
   };
 
-  const filteredLogs = useMemo(() => {
-    return logs.filter(log => {
-      // Activity Filter
-      if (filterActivity !== 'all' && log.activity_type_id !== filterActivity) return false;
-      
-      // Date Filter
-      const logTime = new Date(log.logged_at).getTime();
-      const now = new Date().getTime();
-      const daysDiff = (now - logTime) / (1000 * 3600 * 24);
-      
-      if (filterPeriod === 'week' && daysDiff > 7) return false;
-      if (filterPeriod === 'month' && daysDiff > 30) return false;
-      return true;
-    });
-  }, [logs, filterActivity, filterPeriod]);
+  const handleInspire = (targetUserId: string, targetName: string) => {
+    const key = `inspiration_${targetUserId}`;
+    const lastSentStr = localStorage.getItem(key);
+    
+    if (lastSentStr) {
+       const lastSent = new Date(lastSentStr);
+       const oneWeekAgo = new Date();
+       oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+       if (lastSent > oneWeekAgo) {
+          alert(`You can only inspire ${targetName} once per week! Let them catch their breath.`);
+          return;
+       }
+    }
+    
+    localStorage.setItem(key, new Date().toISOString());
+    alert(`⚡ You sent a burst of Inspiration to ${targetName}! They will feel the boost.`);
+  };
 
-  const totalEp = filteredLogs.reduce((sum, log) => sum + Number(log.ep_earned), 0);
+  if (loading) return <div className="container" style={{paddingTop: '4rem', textAlign: 'center'}}>Loading Matrix...</div>;
 
-  if (!profile) return <div className="container">Loading Dashboard...</div>;
-  const currentActivityObj = activities.find(a => a.id === selectedActivity);
+  // Compute Letterbox Map Stats
+  let prevWp = { x: 0, y: 50, ep: 0, name: 'Start' };
+  let nextWp = { x: 100, y: 50, ep: 100, name: 'End' };
+  let currentX = 0;
+  let quoteIndex = 0;
+  
+  if (journey?.config?.waypoints?.length > 0) {
+     const waypoints = journey.config.waypoints;
+     nextWp = waypoints[0];
+     for (let i = 0; i < waypoints.length; i++) {
+        if (platformEp < waypoints[i].ep) {
+          nextWp = waypoints[i];
+          break;
+        }
+        prevWp = waypoints[i];
+        if (i === waypoints.length - 1) nextWp = prevWp;
+     }
+
+     if (prevWp.ep !== nextWp.ep) {
+        const segObj = (platformEp - prevWp.ep) / (nextWp.ep - prevWp.ep);
+        currentX = prevWp.x + (nextWp.x - prevWp.x) * Math.max(0, Math.min(1, segObj));
+     } else {
+        currentX = nextWp.x;
+     }
+     
+     // Pick a fixed random quote based on the current waypoint index
+     quoteIndex = (waypoints.findIndex((w: any) => w.name === prevWp.name) + 1) % THEMATIC_QUOTES.length;
+  }
 
   return (
-    <main className="container" style={{ paddingTop: '2rem' }}>
-      <header style={{ marginBottom: '3rem' }}>
-        <h1 style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>Overview — <span className="text-gradient">{profile.display_name}</span></h1>
-        <p style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }}>Metrics based on applied filters</p>
-      </header>
+    <div className="container" style={{ paddingBottom: '4rem' }}>
+      
+      {/* 0. Letterbox Map Overlay */}
+      {journey && journey.config.imageUrl && (
+        <div style={{ marginBottom: '2rem', borderRadius: '16px', overflow: 'hidden', border: '1px solid var(--accent-primary)', position: 'relative', height: '220px', background: '#000' }}>
+            {/* The actual image panning depending on X to keep avatar roughly visible if possible, but simpler to just use object-fit cover based on center */}
+            <div style={{ position: 'absolute', width: '200%', height: '100%', left: `-${Math.max(0, currentX - 25)}%`, transition: 'left 2s ease' }}>
+                <img src={journey.config.imageUrl} alt="Journey Map" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.5 }} />
+                
+                {/* Pins */}
+                {journey.config.waypoints.map((wp: any, i: number) => {
+                    const reached = platformEp >= wp.ep;
+                    return (
+                      <div key={i} style={{ position: 'absolute', left: `${wp.x}%`, top: `${wp.y}%`, transform: 'translate(-50%, -50%)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                         <div style={{ width: 14, height: 14, background: reached ? 'var(--accent-gold)' : 'rgba(255,255,255,0.3)', borderRadius: '50%', border: '2px solid #000' }} />
+                         <div style={{ background: 'rgba(0,0,0,0.8)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.75rem', marginTop: '4px', whiteSpace: 'nowrap', color: reached ? 'var(--accent-gold)' : '#fff' }}>
+                           {wp.name} ({wp.ep} EP)
+                         </div>
+                      </div>
+                    )
+                })}
 
-      {/* FILTER PANEL */}
-      <section className="glass-panel" style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1.5rem', padding: '12px 24px' }}>
-         <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Filters:</span>
-         <select className="glass-input" value={filterPeriod} onChange={(e) => setFilterPeriod(e.target.value)} style={{ width: 'auto', padding: '8px' }}>
-            <option value="all">All Time</option>
-            <option value="week">Past 7 Days</option>
-            <option value="month">Past 30 Days</option>
-         </select>
-         <select className="glass-input" value={filterActivity} onChange={(e) => setFilterActivity(e.target.value)} style={{ width: 'auto', padding: '8px' }}>
-            <option value="all">All Activities</option>
-            {activities.map(a => <option key={a.id} value={a.id}>{a.icon_emoji} {a.name}</option>)}
-         </select>
-      </section>
+                {/* Avatar Pin */}
+                <div style={{ position: 'absolute', left: `${currentX}%`, top: `50%`, transform: 'translate(-50%, -50%)', transition: 'all 1s ease-out', zIndex: 10 }}>
+                   <div style={{ background: 'var(--accent-alert)', color: '#fff', padding: '6px', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #fff', boxShadow: '0 0 15px var(--accent-alert)' }}>
+                     🏃
+                   </div>
+                </div>
+            </div>
 
-      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem', marginBottom: '3rem' }}>
-        <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3 style={{ margin: 0, color: 'var(--text-muted)' }}>Filtered EP</h3>
-            <Trophy size={20} color="var(--accent-gold)" />
-          </div>
-          <div style={{ fontSize: '2.5rem', fontWeight: 'bold', fontFamily: 'var(--font-display)' }}>
-            {totalEp.toLocaleString()} <span style={{fontSize: '1rem', color: 'var(--text-muted)'}}>EP</span>
-          </div>
+            {/* Letterbox UI Overlays */}
+            <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', background: 'linear-gradient(to bottom, rgba(0,0,0,0.9), transparent)', padding: '1rem', display: 'flex', justifyContent: 'space-between' }}>
+               <div>
+                  <h3 style={{ margin: 0, fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '8px' }}><MapIcon size={18} color="var(--accent-primary)"/> {journey.name}</h3>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{platformEp.toLocaleString()} / {journey.target_ep.toLocaleString()} EP Logged Collectively</div>
+               </div>
+               <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: '0.9rem', color: 'var(--accent-gold)' }}>Next Checkpoint: <strong>{nextWp.name}</strong></div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{Math.max(0, nextWp.ep - platformEp).toFixed(1)} EP remaining</div>
+               </div>
+            </div>
+
+            <div style={{ position: 'absolute', bottom: '1rem', left: '1rem', right: '1rem', textAlign: 'center', fontStyle: 'italic', fontSize: '0.95rem', color: 'var(--text-muted)', textShadow: '0 1px 3px #000' }}>
+               "{THEMATIC_QUOTES[quoteIndex]}"
+            </div>
         </div>
+      )}
 
-        <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3 style={{ margin: 0, color: 'var(--text-muted)' }}>Filtered Workouts</h3>
-            <Zap size={20} color="var(--accent-secondary)" />
-          </div>
-          <div style={{ fontSize: '2.5rem', fontWeight: 'bold', fontFamily: 'var(--font-display)' }}>
-            {filteredLogs.length} <span style={{fontSize: '1rem', color: 'var(--text-muted)'}}>Logs</span>
-          </div>
-        </div>
-
-        <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3 style={{ margin: 0, color: 'var(--text-muted)' }}>Team Affiliation</h3>
-            <Target size={20} color="var(--accent-primary)" />
-          </div>
-          <div style={{ fontSize: '2.5rem', fontWeight: 'bold', fontFamily: 'var(--font-display)', color: profile.team_id ? '#fff' : 'var(--text-muted)' }}>
-             {profile.team_id ? "Assigned" : "Solo"}
-          </div>
-        </div>
-      </section>
-
-      <section className="glass-panel" style={{ marginBottom: '3rem' }}>
-        <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Activity size={24} color="var(--accent-primary)" /> Log A New Activity</h2>
-        <form onSubmit={handleLogWorkout} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem', marginTop: '1.5rem' }}>
-          <div>
-            <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>Date Achieved</label>
-            <input 
-              type="date" 
-              className="glass-input" 
-              value={logDate}
-              onChange={(e) => setLogDate(e.target.value)}
-              required 
-            />
+      {/* 1. Stats Row */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem', marginBottom: '3rem' }}>
+        <div className="glass-panel" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div style={{ background: 'rgba(163, 255, 71, 0.1)', padding: '1rem', borderRadius: '12px' }}>
+            <Activity size={24} color="var(--accent-primary)" />
           </div>
           <div>
-            <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>Activity Type</label>
-            <select 
-              className="glass-input" 
-              style={{ appearance: 'none', background: 'rgba(0,0,0,0.3)', cursor: 'pointer' }}
-              value={selectedActivity}
-              onChange={(e) => setSelectedActivity(e.target.value)}
-              required
-            >
-              {activities.map(act => (
-                <option key={act.id} value={act.id} style={{ color: '#000' }}>
-                  {act.icon_emoji} {act.name} ({act.unit_label})
-                </option>
-              ))}
-            </select>
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Lifetime EP</div>
+            <div style={{ fontSize: '1.8rem', fontWeight: 600 }}>{totalEP.toFixed(1)}</div>
+          </div>
+        </div>
+        <div className="glass-panel" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div style={{ background: 'rgba(255, 77, 106, 0.1)', padding: '1rem', borderRadius: '12px' }}>
+            <Flame size={24} color="var(--accent-alert)" />
           </div>
           <div>
-            <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-              Quantity {currentActivityObj && `(in ${currentActivityObj.unit_label.split(' ')[1] || 'units'})`}
-            </label>
-            <input 
-              type="number" 
-              className="glass-input" 
-              placeholder="e.g. 5000" 
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-              min="0.1"
-              step="0.1"
-              required 
-            />
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>This Week</div>
+            <div style={{ fontSize: '1.8rem', fontWeight: 600 }}>{weekEP.toFixed(1)}</div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: '1rem' }}>
-            <button type="submit" className="btn-primary" style={{ width: '100%' }} disabled={isSubmitting}>
-              {isSubmitting ? 'Saving...' : 'Drop Log'}
-            </button>
-            {currentActivityObj && quantity && (
-              <div style={{ paddingBottom: '12px', fontSize: '0.9rem', color: 'var(--accent-secondary)', whiteSpace: 'nowrap' }}>
-                +{(Number(quantity) * Number(currentActivityObj.ep_per_unit)).toFixed(1)} EP
+        </div>
+        <div className="glass-panel" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div style={{ background: 'rgba(255, 184, 48, 0.1)', padding: '1rem', borderRadius: '12px' }}>
+            <Trophy size={24} color="var(--accent-gold)" />
+          </div>
+          <div>
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Logs Total</div>
+            <div style={{ fontSize: '1.8rem', fontWeight: 600 }}>{logs.length}</div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', alignItems: 'start' }}>
+        
+        {/* Left Column: Log Entry + Teams Viewer */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+          
+          <div className="glass-panel">
+            <h2 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Zap size={20} color="var(--accent-primary)" /> Burn Data
+            </h2>
+            <form onSubmit={handleLogWorkout} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-muted)' }}>Date</label>
+                <input type="date" className="glass-input" value={date} onChange={e=>setDate(e.target.value)} required />
               </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-muted)' }}>Activity</label>
+                  <select className="glass-input" value={typeId} onChange={(e) => setTypeId(e.target.value)} required>
+                    {activities.map(a => <option key={a.id} value={a.id}>{a.name} ({a.unit_label})</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-muted)' }}>Quantity</label>
+                  <input type="number" step="0.1" min="0" className="glass-input" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="e.g. 5" required />
+                </div>
+              </div>
+              <button type="submit" className="btn-primary" disabled={submitting} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginTop: '1rem' }}>
+                <Plus size={18} /> {submitting ? 'Converting...' : 'Generate EP'}
+              </button>
+            </form>
+          </div>
+
+          <div className="glass-panel">
+            <h2 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <UsersIcon size={20} color="var(--accent-secondary)" /> Athletes Directory
+            </h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+               {teams.map(team => {
+                 const members = allUsers.filter(u => u.team_id === team.id);
+                 if (members.length === 0) return null;
+                 
+                 return (
+                   <div key={team.id} style={{ background: 'rgba(0,0,0,0.3)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                     <h3 style={{ margin: '0 0 1rem 0', color: 'var(--accent-secondary)' }}>{team.name}</h3>
+                     <div style={{ display: 'grid', gap: '0.5rem' }}>
+                       {members.map(m => (
+                          <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem', background: 'rgba(255,255,255,0.02)', borderRadius: '6px' }}>
+                             <span style={{ fontWeight: m.id === currentUser?.id ? 'bold' : 'normal', color: m.id === currentUser?.id ? 'var(--accent-primary)' : '#fff' }}>
+                               {m.display_name} {m.id === currentUser?.id && '(You)'}
+                             </span>
+                             {m.id !== currentUser?.id && (
+                               <button onClick={() => handleInspire(m.id, m.display_name)} title="Send Weekly Inspiration!" style={{ background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '4px', borderRadius: '50%' }}>
+                                 <Heart size={16} color="var(--accent-alert)" />
+                               </button>
+                             )}
+                          </div>
+                       ))}
+                     </div>
+                   </div>
+                 )
+               })}
+               
+               {/* Solo Athletes */}
+               {(() => {
+                 const solo = allUsers.filter(u => !u.team_id);
+                 if (solo.length === 0) return null;
+                 return (
+                   <div style={{ background: 'rgba(0,0,0,0.3)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                     <h3 style={{ margin: '0 0 1rem 0', color: 'var(--text-muted)' }}>Solo Runners</h3>
+                     <div style={{ display: 'grid', gap: '0.5rem' }}>
+                       {solo.map(m => (
+                          <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem', background: 'rgba(255,255,255,0.02)', borderRadius: '6px' }}>
+                             <span style={{ fontWeight: m.id === currentUser?.id ? 'bold' : 'normal', color: m.id === currentUser?.id ? 'var(--accent-primary)' : '#fff' }}>
+                               {m.display_name} {m.id === currentUser?.id && '(You)'}
+                             </span>
+                             {m.id !== currentUser?.id && (
+                               <button onClick={() => handleInspire(m.id, m.display_name)} title="Send Weekly Inspiration!" style={{ background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '4px' }}>
+                                 <Heart size={16} color="var(--accent-alert)" />
+                               </button>
+                             )}
+                          </div>
+                       ))}
+                     </div>
+                   </div>
+                 )
+               })()}
+            </div>
+          </div>
+
+        </div>
+
+        {/* Right Column: Recent Activity Feed */}
+        <div className="glass-panel">
+          <h2 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Activity size={20} color="var(--accent-secondary)" /> Recent Transmissions
+          </h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {logs.length === 0 ? (
+              <p style={{ color: 'var(--text-muted)' }}>No logs yet. Start burning!</p>
+            ) : (
+              logs.map(log => (
+                <div key={log.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', background: 'rgba(0,0,0,0.3)', borderRadius: '12px' }}>
+                  <div>
+                    <div style={{ fontWeight: 500, marginBottom: '0.25rem' }}>{log.activity_types.name}</div>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                      {log.quantity} {log.activity_types.unit_label}{' '}
+                      • {new Date(log.logged_at).toLocaleDateString()}
+                    </div>
+                  </div>
+                  <div style={{ background: 'rgba(163, 255, 71, 0.1)', color: 'var(--accent-primary)', padding: '0.5rem 1rem', borderRadius: '20px', fontWeight: 600 }}>
+                    +{log.ep_earned.toFixed(1)} EP
+                  </div>
+                </div>
+              ))
             )}
           </div>
-        </form>
-      </section>
-
-    </main>
+        </div>
+      </div>
+    </div>
   );
 }
