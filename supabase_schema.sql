@@ -85,9 +85,6 @@ ALTER TABLE workout_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
 
 -- Basic Policies (allowing simple public read for authenticated, and own insert/update)
--- Note: In a production app you'd lock this down to ensure only admins edit activity_types, teams, etc.
--- For the sake of this setup, allowing basic anon/authenticated reads.
-
 CREATE POLICY "Allow public read on teams" ON teams FOR SELECT USING (true);
 CREATE POLICY "Allow public read on users" ON users FOR SELECT USING (true);
 CREATE POLICY "Allow users to update own profile" ON users FOR UPDATE USING (auth.uid() = id);
@@ -96,6 +93,19 @@ CREATE POLICY "Allow public read on workout_logs" ON workout_logs FOR SELECT USI
 CREATE POLICY "Allow users to insert own workout_log" ON workout_logs FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Allow users to update own workout_log within 24 hours" ON workout_logs FOR UPDATE USING (auth.uid() = user_id AND logged_at > now() - interval '24 hours');
 CREATE POLICY "Allow users to delete own workout_log within 24 hours" ON workout_logs FOR DELETE USING (auth.uid() = user_id AND logged_at > now() - interval '24 hours');
+
+-- ADMIN Policies (so the admin panel works fully)
+-- These allow anyone whose 'is_admin' boolean is true to update/insert global configurations and team assignments
+CREATE POLICY "Admins can insert teams" ON teams FOR INSERT WITH CHECK ((SELECT is_admin FROM users WHERE id = auth.uid()) = true);
+CREATE POLICY "Admins can update teams" ON teams FOR UPDATE USING ((SELECT is_admin FROM users WHERE id = auth.uid()) = true);
+
+CREATE POLICY "Admins can update other users" ON users FOR UPDATE USING ((SELECT is_admin FROM users WHERE id = auth.uid()) = true);
+
+CREATE POLICY "Admins can insert activity" ON activity_types FOR INSERT WITH CHECK ((SELECT is_admin FROM users WHERE id = auth.uid()) = true);
+CREATE POLICY "Admins can update activity" ON activity_types FOR UPDATE USING ((SELECT is_admin FROM users WHERE id = auth.uid()) = true);
+
+CREATE POLICY "Admins can insert challenges" ON challenges FOR INSERT WITH CHECK ((SELECT is_admin FROM users WHERE id = auth.uid()) = true);
+CREATE POLICY "Admins can update challenges" ON challenges FOR UPDATE USING ((SELECT is_admin FROM users WHERE id = auth.uid()) = true);
 
 -- Function to handle new user creation from Auth
 create or replace function public.handle_new_user()
