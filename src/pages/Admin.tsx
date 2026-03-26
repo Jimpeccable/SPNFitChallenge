@@ -7,6 +7,7 @@ type Team = { id: string, name: string };
 type UserProfile = { id: string, display_name: string, email: string, team_id: string | null };
 type Challenge = { id: string, name: string, type: string, target_ep: number, is_active: boolean, config: any };
 type Waypoint = { x: number, y: number, name: string, ep: number };
+type Config = { ep_name: string, start_date: string };
 
 export default function Admin() {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
@@ -16,6 +17,7 @@ export default function Admin() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [usersList, setUsersList] = useState<UserProfile[]>([]);
   const [challenges, setChallenges] = useState<Challenge[]>([]);
+  const [globalConfig, setGlobalConfig] = useState<Config>({ ep_name: 'EP', start_date: '' });
 
   // Forms
   const [newName, setNewName] = useState('');
@@ -57,7 +59,15 @@ export default function Admin() {
     if (us) setUsersList(us);
     const { data: ch } = await supabase.from('challenges').select('*').order('created_at', { ascending: false });
     if (ch) setChallenges(ch);
+    const { data: cfg } = await supabase.from('settings').select('value').eq('id', 'platform_config').maybeSingle();
+    if (cfg?.value) setGlobalConfig(cfg.value as any);
   }
+
+  /* GLOBAL CONFIG */
+  const saveConfig = async () => {
+    const { error } = await supabase.from('settings').upsert({ id: 'platform_config', value: globalConfig });
+    if (!error) alert("Global Matrix Saved!"); else alert(error.message);
+  };
 
   /* ACT CONFIG */
   const handleCreateActivity = async (e: React.FormEvent) => {
@@ -68,6 +78,12 @@ export default function Admin() {
   };
   const toggleActivity = async (id: string, currentStatus: boolean) => {
     await supabase.from('activity_types').update({ is_active: !currentStatus }).eq('id', id);
+    loadAllData();
+  };
+  const editActivity = async (id: string, currentName: string, currentEP: number) => {
+    const rename = prompt(`Change name for ${currentName}?`, currentName) || currentName;
+    const reval = prompt(`Change calculation (${globalConfig.ep_name || 'EP'} per unit)?`, currentEP.toString()) || currentEP.toString();
+    await supabase.from('activity_types').update({ name: rename, ep_per_unit: Number(reval) }).eq('id', id);
     loadAllData();
   };
 
@@ -83,14 +99,14 @@ export default function Admin() {
     if (!error) loadAllData(); else alert(error.message);
   };
   const renameTeam = async (id: string) => {
-    const newName = prompt("Enter new team name:");
-    if (!newName) return;
-    await supabase.from('teams').update({ name: newName }).eq('id', id);
+    const n = prompt("Enter new team name:");
+    if (!n) return;
+    await supabase.from('teams').update({ name: n }).eq('id', id);
     loadAllData();
   };
   const deleteTeam = async (id: string) => {
     if (!window.confirm("Delete this team completely? Users will become solo!")) return;
-    await supabase.from('users').update({ team_id: null }).eq('team_id', id); // clear users out safely
+    await supabase.from('users').update({ team_id: null }).eq('team_id', id);
     await supabase.from('teams').delete().eq('id', id);
     loadAllData();
   };
@@ -98,6 +114,19 @@ export default function Admin() {
     if (!window.confirm("Permanently delete this athlete from the leaderboard?")) return;
     await supabase.from('users').delete().eq('id', id);
     loadAllData();
+  };
+  const autoDraftTeams = async () => {
+    if (teams.length === 0) return alert("You need to create some active teams first!");
+    if (!window.confirm(`Auto-assign all ${usersList.length} athletes randomly into the ${teams.length} teams?`)) return;
+    
+    // Shuffle array
+    let shuffled = [...usersList].sort(() => 0.5 - Math.random());
+    for (let i = 0; i < shuffled.length; i++) {
+       const assignedTeamId = teams[i % teams.length].id;
+       await supabase.from('users').update({ team_id: assignedTeamId }).eq('id', shuffled[i].id);
+    }
+    loadAllData();
+    alert("Draft Complete! All athletes reassigned.");
   };
 
   /* CHALLENGE CONFIG */
@@ -142,7 +171,7 @@ export default function Admin() {
     } else {
       wpName = prompt("Enter Waypoint Name (e.g. 'Mordor Gates'):") || '';
       if (!wpName) return;
-      wpEp = prompt(`Enter EP required to reach ${wpName}:`) || '';
+      wpEp = prompt(`Enter ${globalConfig.ep_name || 'EP'} required to reach ${wpName}:`) || '';
       if (!wpEp) return;
     }
 
@@ -174,6 +203,22 @@ export default function Admin() {
         <h1 style={{ fontSize: '3rem' }}>Admin <span className="text-gradient">Control Panel</span></h1>
       </header>
 
+      {/* 0. PLATFORM CONFIGURATION */}
+      <section className="glass-panel" style={{ marginBottom: '3rem', borderLeft: '4px solid #fff' }}>
+        <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem' }}><Settings size={24} color="#fff" /> Master Platform Rules</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem', marginBottom: '1rem' }}>
+           <div>
+              <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-muted)' }}>Score Terminology (Instead of EP)</label>
+              <input type="text" className="glass-input" value={globalConfig.ep_name || ''} onChange={e => setGlobalConfig({...globalConfig, ep_name: e.target.value})} placeholder="e.g. Energy, SPN Points, Mana" />
+           </div>
+           <div>
+              <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-muted)' }}>Countdown / Start Date (GMT)</label>
+              <input type="datetime-local" className="glass-input" value={globalConfig.start_date || ''} onChange={e => setGlobalConfig({...globalConfig, start_date: e.target.value})} />
+           </div>
+        </div>
+        <button className="btn-primary" onClick={saveConfig}>Update Master Settings</button>
+      </section>
+
       {editingMapId && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.9)', zIndex: 100, padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto' }}>
           <h2>Map Route Editor</h2>
@@ -193,7 +238,7 @@ export default function Admin() {
                 <div key={i} style={{ position: 'absolute', left: `${wp.x}%`, top: `${wp.y}%`, transform: 'translate(-50%, -50%)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                   <div style={{ width: 14, height: 14, background: 'var(--accent-gold)', borderRadius: '50%', border: '2px solid #000' }} />
                   <div style={{ background: 'rgba(0,0,0,0.8)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.75rem', marginTop: '4px', whiteSpace: 'nowrap' }}>
-                    {wp.name} ({wp.ep} EP)
+                    {wp.name} ({wp.ep} {globalConfig.ep_name || 'EP'})
                   </div>
                 </div>
               ))}
@@ -216,15 +261,15 @@ export default function Admin() {
                <option value="bingo">🎯 Fitness Bingo</option>
                <option value="steps">👣 Step Loggers</option>
             </select>
-            <input type="number" step="0.1" className="glass-input" placeholder="Target EP" value={newChalEp} onChange={e=>setNewChalEp(e.target.value)} required />
+            <input type="number" step="0.1" className="glass-input" placeholder={`Target ${globalConfig.ep_name || 'EP'}`} value={newChalEp} onChange={e=>setNewChalEp(e.target.value)} required />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', fontSize: '0.85rem' }}>
              <button type="button" style={{ background: 'rgba(255,184,48,0.2)', border: '1px solid var(--accent-gold)', color: 'var(--accent-gold)', padding: '4px 12px', borderRadius: '4px', cursor: 'pointer' }} onClick={() => {
                  const weeks = prompt("How many weeks will this challenge run? (e.g. '4')") || "1";
                  const suggestedTotal = usersList.length * 500 * Number(weeks);
                  setNewChalEp(suggestedTotal.toString());
-                 alert(`Suggested Target: ${suggestedTotal} EP.\nCalculation: ${usersList.length} athletes × 500 EP/week average × ${weeks} weeks.`);
-             }}>✨ Auto-Calculate Target EP</button>
+                 alert(`Suggested Target: ${suggestedTotal} ${globalConfig.ep_name || 'EP'}.\nCalculation: ${usersList.length} athletes × 500/week average × ${weeks} weeks.`);
+             }}>✨ Auto-Calculate Target</button>
              <button type="submit" className="btn-primary" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginLeft: 'auto' }}><Plus size={16}/> Create Goal</button>
           </div>
         </form>
@@ -232,7 +277,7 @@ export default function Admin() {
           {challenges.map(c => (
             <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', background: 'rgba(0,0,0,0.3)', borderRadius: '8px' }}>
               <div>
-                <strong style={{fontSize: '1.2rem'}}>{c.name}</strong> <span style={{color: 'var(--text-muted)'}}>({c.type})</span> — Goal: {c.target_ep} EP
+                <strong style={{fontSize: '1.2rem'}}>{c.name}</strong> <span style={{color: 'var(--text-muted)'}}>({c.type})</span> — Goal: {c.target_ep} {globalConfig.ep_name || 'EP'}
               </div>
               <div style={{ display: 'flex', gap: '1rem' }}>
                 {c.type === 'journey' && (
@@ -256,10 +301,13 @@ export default function Admin() {
         
         {/* Teams Maker & List */}
         <div style={{ marginBottom: '2rem', padding: '1rem', background: 'rgba(0,0,0,0.2)', borderRadius: '8px' }}>
-            <h3 style={{marginBottom: '1rem', fontSize: '1rem', color: 'var(--text-muted)'}}>Manage Active Teams</h3>
+            <h3 style={{marginBottom: '1rem', fontSize: '1rem', color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between' }}>
+               <span>Manage Active Teams</span>
+               <button onClick={autoDraftTeams} style={{ background: 'var(--accent-primary)', border: 'none', color: '#000', fontWeight: 'bold', padding: '4px 12px', borderRadius: '4px', cursor: 'pointer' }}>🎲 Auto-Draft Random Teams</button>
+            </h3>
             <form onSubmit={handleCreateTeam} style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
               <input type="text" className="glass-input" placeholder="Team Name (e.g. Finance Legends)" value={newTeamName} onChange={e=>setNewTeamName(e.target.value)} required />
-              <button type="submit" className="btn-primary" style={{ whiteSpace: 'nowrap' }}><Plus size={16}/> New Team</button>
+              <button type="submit" className="btn-primary" style={{ whiteSpace: 'nowrap' }}><Plus size={16}/> Custom Team</button>
             </form>
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                {teams.map(t => (
@@ -295,17 +343,23 @@ export default function Admin() {
 
       {/* 3. ACTIVITY CONFIG */}
       <section className="glass-panel" style={{ borderLeft: '4px solid var(--accent-gold)' }}>
-        <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem' }}><Settings size={24} color="var(--accent-gold)" /> Effort Points Engine</h2>
+        <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem' }}><Settings size={24} color="var(--accent-gold)" /> Event Tracker Engine</h2>
         <form onSubmit={handleCreateActivity} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem', marginBottom: '2rem', padding: '1rem', background: 'rgba(0,0,0,0.2)' }}>
           <input type="text" className="glass-input" placeholder="Activity (e.g. Skiing)" value={newName} onChange={e=>setNewName(e.target.value)} required />
           <input type="text" className="glass-input" placeholder="Unit (e.g. 1 hour)" value={newUnit} onChange={e=>setNewUnit(e.target.value)} required />
-          <input type="number" step="0.1" className="glass-input" placeholder="EP per unit (e.g. 5)" value={newEp} onChange={e=>setNewEp(e.target.value)} required />
+          <input type="number" step="0.1" className="glass-input" placeholder={`${globalConfig.ep_name || 'EP'} per unit (e.g. 5)`} value={newEp} onChange={e=>setNewEp(e.target.value)} required />
           <button type="submit" className="btn-primary" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}><Plus size={16}/> Add Action</button>
         </form>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {activities.map(act => (
             <div key={act.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', background: 'rgba(0,0,0,0.3)', borderRadius: '8px' }}>
-              <div><strong>{act.name}</strong> <span style={{ color: 'var(--text-muted)' }}>1x Unit ({act.unit_label}) = {act.ep_per_unit} EP</span></div>
+              <div>
+                <strong>{act.name}</strong> 
+                <span style={{ color: 'var(--text-muted)', marginLeft: 8 }}>
+                   1x Unit ({act.unit_label}) = {act.ep_per_unit} {globalConfig.ep_name || 'EP'}
+                </span>
+                <button onClick={() => editActivity(act.id, act.name, act.ep_per_unit)} style={{ background: 'none', border: 'none', color: 'var(--accent-gold)', cursor: 'pointer', fontSize: '12px', marginLeft: '1rem' }}>Edit Rates</button>
+              </div>
               <button className="btn-primary" style={{ background: act.is_active ? 'rgba(163, 255, 71, 0.2)' : 'rgba(255, 77, 106, 0.2)', boxShadow: 'none' }} onClick={() => toggleActivity(act.id, act.is_active)} >
                 {act.is_active ? 'Active' : 'Archived'}
               </button>
@@ -317,13 +371,13 @@ export default function Admin() {
       {/* 4. DANGER ZONE */}
       <section className="glass-panel" style={{ borderLeft: '4px solid var(--accent-alert)', marginTop: '3rem' }}>
         <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem', color: 'var(--accent-alert)' }}><Settings size={24} color="var(--accent-alert)" /> Danger Zone (Hard Reset)</h2>
-        <p style={{ color: 'var(--text-muted)' }}>If you are done testing the platform and want to actually begin the real challenge, you can permanently erase all logged activities here to start from 0 EP.</p>
+        <p style={{ color: 'var(--text-muted)' }}>If you are done testing the platform and want to actually begin the real challenge, you can permanently erase all logged activities here to start from 0 {globalConfig.ep_name || 'EP'}.</p>
         <button className="btn-primary" style={{ background: 'transparent', border: '2px solid var(--accent-alert)', color: 'var(--accent-alert)', marginTop: '1rem', padding: '12px 24px', fontWeight: 'bold' }} onClick={async () => {
-           if (prompt("CRITICAL WARNING: This irrevocably deletes EVERY workout log from ALL users platform-wide. Type 'FACTORY RESET' to proceed:") === 'FACTORY RESET') {
+           if (prompt(`CRITICAL WARNING: This irrevocably deletes EVERY workout log from ALL users platform-wide. Type 'FACTORY RESET' to proceed:`) === 'FACTORY RESET') {
               const { error } = await supabase.from('workout_logs').delete().neq('id', '00000000-0000-0000-0000-000000000000'); // Deletes all rows safely
-              if (!error) { alert("All logs annihilated. The platform EP is back to 0."); loadAllData(); } else alert("Database error: " + error.message);
+              if (!error) { alert(`All logs annihilated. The platform is back to 0 ${globalConfig.ep_name || 'EP'}.`); loadAllData(); } else alert("Database error: " + error.message);
            }
-        }}>🔥 Purge All Logs & Reset Platform to 0 EP</button>
+        }}>🔥 Purge All Logs & Reset Platform to 0 {globalConfig.ep_name || 'EP'}</button>
       </section>
 
     </div>
